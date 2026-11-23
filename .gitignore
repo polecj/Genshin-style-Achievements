@@ -1,0 +1,10 @@
+.browser-test/
+browser-result.html
+browser-test.html
+chrome-test.log
+test-result.html
+preview.png
+preview-mobile.png
+icon-preview.png
+prepare_assets.py
+assets/ai-icons-review.png
