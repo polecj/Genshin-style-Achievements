@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="zh-CN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>成就工坊</title><link rel="icon" type="image/png" href="assets/favicon.png"><link rel="stylesheet" href="vendor/viewerjs/viewer.min.css"><link rel="stylesheet" href="style.css"><script defer src="vendor/viewerjs/viewer.min.js"></script><script defer src="assets.js"></script><script defer src="app.js"></script></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>成就工坊</title><link rel="icon" type="image/png" href="assets/favicon.png"><link rel="stylesheet" href="vendor/viewerjs/viewer.min.css"><link rel="stylesheet" href="style.css?v=20261124"><script defer src="vendor/viewerjs/viewer.min.js"></script><script defer src="assets.js?v=20261124"></script><script defer src="app.js?v=20261124"></script></head>
 <body>
 <header><div class="brand"><span class="emblem">✧</span><div>成就工坊</div></div></header>
 <main><div class="workspace">
@@ -8,13 +8,14 @@
 <label>成就标题<input id="title" maxlength="300" value="捕风的异乡人" placeholder="捕风的异乡人"></label>
 <label class="check"><input type="checkbox" id="autoFit" checked>长标题自动缩小</label>
 <div class="icon-picker"><span class="field-label">图标</span><input id="icon" type="hidden" value="original"><div id="iconMenu" class="icon-options" role="group" aria-label="选择图标"><button type="button" data-icon="original" aria-pressed="true"><img alt="原版" width="76" height="76"><span>原版</span></button><button type="button" data-icon="jiaoda" aria-pressed="false"><img alt="交大" width="76" height="76"><span>交大</span></button></div></div>
+<label class="upload-label">自定义图标<input id="customIcon" type="file" accept="image/png,image/jpeg,image/webp"><span class="hint">请上传风格相符的素材，网页不会自动转换风格。素材仅保存在当前浏览器。</span></label><p id="uploadStatus" class="hint" role="status"></p>
 <label class="emoji-label">Emoji 图标<input id="emoji" type="text" value="⭐" placeholder="输入 1 个 Emoji" aria-describedby="emojiStatus" autocomplete="off"><span id="emojiStatus" class="hint" role="status"></span></label>
 <details><summary>标题样式 <span>＋</span></summary><div id="styleControls"></div><label>文字区域宽度<input id="textWidth" type="number" min="100" max="2400" value="2260"></label><button class="secondary" id="reset">恢复默认样式</button></details>
 <p class="hint" id="saveStatus" role="status"></p>
 </aside>
 <section class="panel preview-panel"><div class="preview-heading"><h2>预览</h2><div class="themes" aria-label="预览底色"><button data-theme="grid" class="active" title="透明棋盘" aria-label="透明棋盘">▦</button><button data-theme="dark" title="深色" aria-label="深色">●</button><button data-theme="light" title="浅色" aria-label="浅色">○</button></div></div>
-<div id="stage" class="stage grid"><button id="openPreview" aria-label="打开大图预览" disabled><img id="previewImage" alt="成就图片预览"><span class="zoom-hint">点击查看大图</span></button><div id="loading">加载中…</div></div>
+<div id="stage" class="stage grid"><button id="openPreview" aria-label="打开大图预览" disabled><img id="previewImage" alt="成就图片预览" draggable="true"><span class="zoom-hint">点击查看大图</span></button><div id="loading">加载中…</div></div>
 <div class="preview-meta"><span id="previewSize" aria-live="polite">968 × 280 px</span><label class="check"><input type="checkbox" id="hdPreview">高清预览</label></div>
 <p id="warning" role="status"></p>
-<div class="export-area"><span class="hint">透明 PNG</span><div class="export-options"><select id="scale" aria-label="导出尺寸"><option value="1">3872 × 1120</option><option value="0.5">1936 × 560</option><option value="0.25" selected>968 × 280</option></select><button id="download" disabled>导出 PNG ↓</button></div></div>
+<div class="export-area"><span class="hint">透明 PNG · 可拖出使用</span><div class="export-options"><select id="scale" aria-label="导出尺寸"><option value="1">1936 × 560</option><option value="0.5" selected>968 × 280</option></select><button id="download" disabled>导出 PNG ↓</button></div></div>
 </section></div></main></body></html>

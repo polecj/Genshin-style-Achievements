@@ -19,7 +19,7 @@
     const saved = JSON.parse(localStorage.getItem(KEY));
     if (saved && typeof saved === 'object') {
       if (typeof saved.title === 'string') state.title = saved.title.slice(0,300);
-      if ([...Object.keys(presets),'emoji'].includes(saved.icon)) state.icon=saved.icon;
+      if ([...Object.keys(presets),'emoji'].includes(saved.icon) || /^custom-/.test(saved.icon||'')) state.icon=saved.icon;
       if(typeof saved.emoji==='string') state.emoji=firstEmoji(saved.emoji)||defaults.emoji;
       if (typeof saved.autoFit === 'boolean') state.autoFit = saved.autoFit;
       if (Number.isFinite(saved.textWidth)) state.textWidth = Math.max(100,Math.min(2400,saved.textWidth));
@@ -31,11 +31,37 @@
       }
     }
   } catch { canSave = false; }
-  const canvas = document.createElement('canvas');canvas.width=3872;canvas.height=1120;
+  const canvas = document.createElement('canvas');canvas.width=1936;canvas.height=560;
   const ctx = canvas.getContext('2d');
   const outputCanvas = document.createElement('canvas');
   const previewImage = $('previewImage');
-  let viewer;
+  let viewer,dragFile=null,dragURL='',encodeVersion=0,suppressPreviewClick=false;
+  function filename(){return effectiveTitle().trim().replace(/[\\/:*?"<>|\x00-\x1f]/g,'_').slice(0,80)+'.png';}
+  function openIconDB(){return new Promise((resolve,reject)=>{
+    const timer=setTimeout(()=>reject(new Error('本地存储连接超时')),5000);
+    const request=indexedDB.open('achievement-custom-icons',1);
+    request.onblocked=()=>{clearTimeout(timer);reject(new Error('请关闭其他页面后重试'));};
+    request.onupgradeneeded=()=>request.result.createObjectStore('icons',{keyPath:'id'});
+    request.onsuccess=()=>{clearTimeout(timer);resolve(request.result);};request.onerror=()=>{clearTimeout(timer);reject(request.error);};
+  });}
+  async function iconStorage(mode,record){
+    const db=await openIconDB();
+    try{return await new Promise((resolve,reject)=>{
+      const transaction=db.transaction('icons',mode==='get'?'readonly':'readwrite');
+      const store=transaction.objectStore('icons');
+      const request=mode==='get'?store.getAll():store.put(record);
+      transaction.oncomplete=()=>resolve(request.result);transaction.onerror=()=>reject(transaction.error);
+      transaction.onabort=()=>reject(transaction.error||new Error('素材保存中断'));
+    });}finally{db.close();}
+  }
+  function addCustomCard(record,icon){
+    icons[record.id]=icon;
+    const button=document.createElement('button');button.type='button';button.dataset.icon=record.id;
+    button.setAttribute('aria-pressed','false');
+    const thumbnail=document.createElement('img');thumbnail.width=thumbnail.height=76;thumbnail.src=icon.src;thumbnail.alt=record.name;
+    const label=document.createElement('span');label.textContent=record.name;
+    button.append(thumbnail,label);$('iconMenu').append(button);
+  }
   const image = new Image(), frameImage = new Image();
   const icons = Object.fromEntries(Object.keys(presets).map(key=>[key,new Image()]));
   const emojiCanvas=document.createElement('canvas');emojiCanvas.width=emojiCanvas.height=768;
@@ -105,10 +131,12 @@
   function render() {
     cancelAnimationFrame(frame);
     if(!ready) return;
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-    if(state.icon==='original') ctx.drawImage(image,0,0);
+    ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,canvas.width,canvas.height);
+    // Keep existing saved coordinates in the original design coordinate space.
+    ctx.setTransform(.5,0,0,.5,0,0);
+    if(state.icon==='original') ctx.drawImage(image,0,0,3872,1120);
     else {
-      ctx.drawImage(frameImage,0,0);
+      ctx.drawImage(frameImage,0,0,3872,1120);
       const icon=state.icon==='emoji'?makeEmoji():icons[state.icon];
       const iw=icon.naturalWidth||icon.width,ih=icon.naturalHeight||icon.height;
       const fit=Math.min(iconSlot.width/iw,iconSlot.height/ih);
@@ -145,20 +173,60 @@
     previewImage.alt=`${effectiveTitle()} · ${previewSource.width} × ${previewSource.height}`;
     $('previewSize').textContent=`${outputCanvas.width} × ${outputCanvas.height} px`;
     if(viewer) viewer.update();
+    prepareDragFile();
   }
+  function prepareDragFile(){
+    const version=++encodeVersion;dragFile=null;
+    outputCanvas.toBlob(blob=>{
+      if(version!==encodeVersion || !blob)return;
+      dragFile=new File([blob],filename(),{type:'image/png'});
+      const old=dragURL;dragURL=URL.createObjectURL(dragFile);
+      if(old)setTimeout(()=>URL.revokeObjectURL(old),60000);
+    },'image/png');
+  }
+  previewImage.addEventListener('dragstart',event=>{
+    if(!dragFile || !event.dataTransfer){event.preventDefault();return;}
+    const transfer=event.dataTransfer;transfer.clearData();transfer.effectAllowed='copy';
+    // File payload for browser drop targets; Chromium DownloadURL for desktop apps.
+    transfer.items.add(dragFile);
+    transfer.setData('DownloadURL',`image/png:${dragFile.name}:${dragURL}`);
+    transfer.setData('text/uri-list',dragURL);
+    suppressPreviewClick=true;
+  });
+  previewImage.addEventListener('dragend',()=>setTimeout(()=>{suppressPreviewClick=false;},100));
   $('scale').addEventListener('change',()=>{if(ready) render();});
   $('hdPreview').addEventListener('change',()=>{if(ready) updatePreview();});
-  $('openPreview').addEventListener('click',()=>{if(ready && viewer) viewer.show();});
+  $('openPreview').addEventListener('click',()=>{if(ready && viewer && !suppressPreviewClick) viewer.show();});
   for(const key of fields) $(key).addEventListener('input',()=>{
     if(key==='autoFit') state[key]=$(key).checked;
     else if(key==='textWidth') {if(!$(key).value || !$(key).validity.valid)return;state[key]=Number($(key).value);}
     else state[key]=$(key).value;
     save();schedule();
   });
-  document.querySelectorAll('[data-icon]').forEach(button=>button.addEventListener('click',()=>{
-    $('icon').value=button.dataset.icon;
-    $('icon').dispatchEvent(new Event('input'));
-  }));
+  $('iconMenu').addEventListener('click',event=>{
+    const button=event.target.closest('[data-icon]');if(!button)return;
+    $('icon').value=button.dataset.icon;$('icon').dispatchEvent(new Event('input'));
+  });
+  async function importCustomIcon(file){
+    if(!file || !['image/png','image/jpeg','image/webp'].includes(file.type))throw new Error('请选择 PNG、JPG 或 WebP 图片');
+    if(file.size>10*1024*1024)throw new Error('图片不能超过 10 MB');
+    const url=URL.createObjectURL(file),source=new Image();
+    try{source.src=url;await source.decode();
+      const fit=Math.min(1,384/source.naturalWidth,384/source.naturalHeight);
+      const c=document.createElement('canvas');c.width=Math.max(1,Math.round(source.naturalWidth*fit));c.height=Math.max(1,Math.round(source.naturalHeight*fit));
+      c.getContext('2d').drawImage(source,0,0,c.width,c.height);
+      const data=c.toDataURL('image/png');
+      const record={id:'custom-'+crypto.randomUUID(),name:file.name.replace(/\.[^.]+$/,'').slice(0,32)||'自定义',data};
+      await iconStorage('put',record);
+      const icon=new Image();icon.src=data;await icon.decode();addCustomCard(record,icon);
+      state.icon=record.id;$('icon').value=record.id;save();render();
+      $('uploadStatus').textContent='已保存在此浏览器';return record.id;
+    }finally{URL.revokeObjectURL(url);}
+  }
+  $('customIcon').addEventListener('change',async()=>{
+    try{await importCustomIcon($('customIcon').files[0]);}catch(error){$('uploadStatus').textContent='导入失败：'+error.message;}
+    finally{$('customIcon').value='';}
+  });
   $('emoji').value=state.emoji;
   function applyEmoji(inserted='') {
     const value=$('emoji').value;
@@ -194,7 +262,7 @@
       const blob=await new Promise(resolve=>outputCanvas.toBlob(resolve,'image/png'));
       if(!blob) throw new Error('PNG 编码失败');
       const url=URL.createObjectURL(blob),link=document.createElement('a');
-      link.href=url;link.download=effectiveTitle().trim().replace(/[\\/:*?"<>|\x00-\x1f]/g,'_').slice(0,80)+'.png';
+      link.href=url;link.download=filename();
       document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),10000);
     } catch(error) {$('warning').textContent='导出失败：'+error.message;} finally {button.disabled=false;}
   });
@@ -209,7 +277,16 @@
         loadImage(image,assets.background),loadImage(frameImage,assets.frame),
         ...Object.entries(icons).map(([key,target])=>loadImage(target,assets.icons[key]))
       ]);
+      document.documentElement.dataset.loading='assets';
       const [loadedFont]=await Promise.all([font.load(),imageReady]);document.fonts.add(loadedFont);await document.fonts.ready;
+      document.documentElement.dataset.loading='storage';
+      try{
+        for(const record of await iconStorage('get')){
+          if(!/^custom-/.test(record.id)||typeof record.data!=='string')continue;
+          const icon=new Image();icon.src=record.data;await icon.decode();addCustomCard(record,icon);
+        }
+      }catch(error){$('uploadStatus').textContent='本地素材存储不可用，已保存素材可能无法恢复';}
+      if(!icons[state.icon] && state.icon!=='emoji'){state.icon='original';$('icon').value='original';}
       if(typeof Viewer!=='function') throw new Error('大图查看器加载失败');
       viewer=new Viewer(previewImage,{
         navbar:false,transition:false,title:true,
@@ -221,7 +298,7 @@
       ready=true;render();$('loading').hidden=true;$('download').disabled=false;$('openPreview').disabled=false;
       document.documentElement.dataset.ready='true';
       // A small browser-test surface; no network or upload API.
-      window.achievementStudio={render,getState:()=>clone(state),canvas,outputCanvas,getViewer:()=>viewer};
+      window.achievementStudio={render,getState:()=>clone(state),canvas,outputCanvas,getViewer:()=>viewer,importCustomIcon,getDragFile:()=>dragFile};
     } catch(error) {$('loading').textContent='加载失败：'+error.message;document.documentElement.dataset.ready='error';}
   }
   init();

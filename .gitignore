@@ -1,4 +1,6 @@
 .browser-test/
+.browser-test-real/
+run-browser-test.cjs
 browser-result.html
 browser-test.html
 chrome-test.log
